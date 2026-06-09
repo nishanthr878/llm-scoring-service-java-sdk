@@ -122,6 +122,3 @@ ConversationTracker tracker = scoring.session(
 - [Python SDK](https://github.com/nishanthr878/llm-scoring-service-python-sdk)
 - [UI](https://github.com/nishanthr878/llm-scoring-service-ui)
 
-## License
-
-MIT
