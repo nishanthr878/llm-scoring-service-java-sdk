@@ -27,15 +27,60 @@ public class ScoringHttpClient {
                 .build();
     }
 
-    // Async ingest — fire and forget
-    public CompletableFuture<Void> ingestAsync(IngestPayload payload) {
-        return CompletableFuture.runAsync(() -> ingestWithRetry(payload));
+
+    public ScoringResponse ingestSync(IngestPayload payload) {
+        return requestWithRetry(baseUrl + "/api/v1/events/ingest?sync=true", payload, 200);
     }
 
-    // Sync ingest — returns scoring response
-    public ScoringResponse ingestSync(IngestPayload payload) {
-        return ingestWithRetry(payload);
+    public CompletableFuture<ScoringResponse> ingestAsync(IngestPayload payload) {
+        return CompletableFuture.supplyAsync(() ->
+                requestWithRetry(baseUrl + "/api/v1/events/ingest", payload, 202));
     }
+
+    private ScoringResponse requestWithRetry(String url, IngestPayload payload,
+                                             int expectedStatus) {
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String json = objectMapper.writeValueAsString(payload);
+
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(json))
+                        .timeout(Duration.ofSeconds(30))
+                        .build();
+
+                HttpResponse<String> response = httpClient.send(
+                        request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == expectedStatus) {
+                    if (response.body() != null && !response.body().isBlank()) {
+                        return objectMapper.readValue(response.body(), ScoringResponse.class);
+                    }
+                    return null;
+                }
+
+                throw new RuntimeException("Unexpected status: "
+                        + response.statusCode() + " — " + response.body());
+
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < maxRetries) {
+                    try { Thread.sleep(500L * attempt); }
+                    catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+
+        throw new RuntimeException(
+                "Failed after " + maxRetries + " attempts", lastException);
+    }
+
 
     private ScoringResponse ingestWithRetry(IngestPayload payload) {
         Exception lastException = null;

@@ -118,7 +118,7 @@ public class ConversationTracker {
                     return null;
                 });
     }
-    
+
 
     private void handleError(Throwable e) {
         if (config.isSilentOnError()) {
