@@ -99,24 +99,26 @@ public class ConversationTracker {
     }
 
     private void submitAsync(IngestPayload payload) {
-        CompletableFuture<Void> future = httpClient.ingestAsync(payload);
-
-        if (onCompleteCallback != null) {
-            future.thenRun(() -> {
-                try {
-                    ScoringResponse response = httpClient.ingestSync(payload);
-                    onCompleteCallback.accept(response);
-                } catch (Exception e) {
+        CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        return httpClient.ingestSync(payload);
+                    } catch (Exception e) {
+                        handleError(e);
+                        return null;
+                    }
+                })
+                .thenAccept(result -> {
+                    if (result != null && onCompleteCallback != null) {
+                        onCompleteCallback.accept(result);
+                    }
+                })
+                .exceptionally(e -> {
                     handleError(e);
-                }
-            });
-        }
-
-        future.exceptionally(e -> {
-            handleError(e);
-            return null;
-        });
+                    return null;
+                });
     }
+    
 
     private void handleError(Throwable e) {
         if (config.isSilentOnError()) {
